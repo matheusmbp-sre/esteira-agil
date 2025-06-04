@@ -1,0 +1,184 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: Template para Lambda que monitora um RDS específico e cria alarmes no CloudWatch com notificações via SNS.
+Parameters:
+  RdsInstanceIdentifier:
+    Type: String
+    Description: Identificador da instância RDS a ser monitorada.
+  CpuUtilizationThreshold:
+    Type: Number
+    Default: 80
+    Description: Threshold para CPU Utilization (em %).
+  DatabaseConnectionsThreshold:
+    Type: Number
+    Default: 100
+    Description: Threshold para Database Connections.
+  FreeableMemoryThreshold:
+    Type: Number
+    Default: 100000000 # 100 MB
+    Description: Threshold para Freeable Memory (em bytes).
+  FreeStorageSpaceThreshold:
+    Type: Number
+    Default: 5000000000 # 5 GB
+    Description: Threshold para Free Storage Space (em bytes).
+  SnsNotificationEmail:
+    Type: String
+    Description: E-mail para receber notificações via SNS.
+
+Resources:
+  AlarmNotificationTopic:
+    Type: AWS::SNS::Topic
+    Properties:
+      DisplayName: "RDS Alarm Notification Topic"
+
+  AlarmNotificationSubscription:
+    Type: AWS::SNS::Subscription
+    Properties:
+      Protocol: email
+      Endpoint: !Ref SnsNotificationEmail
+      TopicArn: !Ref AlarmNotificationTopic
+
+  LambdaFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: "RDSMonitorLambdaSpecific"
+      Handler: "index.lambda_handler"
+      Runtime: python3.9
+      Role: !GetAtt LambdaExecutionRole.Arn
+      Timeout: 60
+      Code:
+        ZipFile: |
+          import boto3
+          import os
+
+          cloudwatch = boto3.client('cloudwatch')
+
+          def lambda_handler(event, context):
+              db_instance_id = os.environ['RDS_INSTANCE_ID']
+              
+              # Alarme para CPU Utilization
+              cloudwatch.put_metric_alarm(
+                  AlarmName=f'CPUUtilization-{db_instance_id}',
+                  ComparisonOperator='GreaterThanThreshold',
+                  EvaluationPeriods=1,
+                  MetricName='CPUUtilization',
+                  Namespace='AWS/RDS',
+                  Period=300,
+                  Statistic='Average',
+                  Threshold=int(os.environ['CPU_THRESHOLD']),
+                  ActionsEnabled=True,
+                  AlarmActions=[os.environ['SNS_TOPIC_ARN']],
+                  AlarmDescription='Alarme para CPU Utilization',
+                  Dimensions=[{'Name': 'DBInstanceIdentifier', 'Value': db_instance_id}]
+              )
+
+              # Alarme para Database Connections
+              cloudwatch.put_metric_alarm(
+                  AlarmName=f'DatabaseConnections-{db_instance_id}',
+                  ComparisonOperator='GreaterThanThreshold',
+                  EvaluationPeriods=1,
+                  MetricName='DatabaseConnections',
+                  Namespace='AWS/RDS',
+                  Period=300,
+                  Statistic='Average',
+                  Threshold=int(os.environ['DB_CONNECTIONS_THRESHOLD']),
+                  ActionsEnabled=True,
+                  AlarmActions=[os.environ['SNS_TOPIC_ARN']],
+                  AlarmDescription='Alarme para Database Connections',
+                  Dimensions=[{'Name': 'DBInstanceIdentifier', 'Value': db_instance_id}]
+              )
+
+              # Alarme para Freeable Memory
+              cloudwatch.put_metric_alarm(
+                  AlarmName=f'FreeableMemory-{db_instance_id}',
+                  ComparisonOperator='LessThanThreshold',
+                  EvaluationPeriods=1,
+                  MetricName='FreeableMemory',
+                  Namespace='AWS/RDS',
+                  Period=300,
+                  Statistic='Average',
+                  Threshold=int(os.environ['FREEABLE_MEMORY_THRESHOLD']),
+                  ActionsEnabled=True,
+                  AlarmActions=[os.environ['SNS_TOPIC_ARN']],
+                  AlarmDescription='Alarme para Freeable Memory',
+                  Dimensions=[{'Name': 'DBInstanceIdentifier', 'Value': db_instance_id}]
+              )
+
+              # Alarme para Free Storage Space
+              cloudwatch.put_metric_alarm(
+                  AlarmName=f'FreeStorageSpace-{db_instance_id}',
+                  ComparisonOperator='LessThanThreshold',
+                  EvaluationPeriods=1,
+                  MetricName='FreeStorageSpace',
+                  Namespace='AWS/RDS',
+                  Period=300,
+                  Statistic='Average',
+                  Threshold=int(os.environ['FREE_STORAGE_SPACE_THRESHOLD']),
+                  ActionsEnabled=True,
+                  AlarmActions=[os.environ['SNS_TOPIC_ARN']],
+                  AlarmDescription='Alarme para Free Storage Space',
+                  Dimensions=[{'Name': 'DBInstanceIdentifier', 'Value': db_instance_id}]
+              )
+
+      Environment:
+        Variables:
+          RDS_INSTANCE_ID: !Ref RdsInstanceIdentifier
+          CPU_THRESHOLD: !Ref CpuUtilizationThreshold
+          DB_CONNECTIONS_THRESHOLD: !Ref DatabaseConnectionsThreshold
+          FREEABLE_MEMORY_THRESHOLD: !Ref FreeableMemoryThreshold
+          FREE_STORAGE_SPACE_THRESHOLD: !Ref FreeStorageSpaceThreshold
+          SNS_TOPIC_ARN: !Ref AlarmNotificationTopic
+
+  LambdaExecutionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: LambdaExecutionRoleForSpecificRDS
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: CWAndSNSAccess
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - cloudwatch:PutMetricAlarm
+                  - sns:Publish
+                Resource: '*'
+
+  LambdaLogPolicy:
+    Type: AWS::IAM::Policy
+    Properties:
+      PolicyName: LambdaLogPolicy
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Action:
+              - logs:CreateLogGroup
+              - logs:CreateLogStream
+              - logs:PutLogEvents
+            Resource: '*'
+      Roles:
+        - !Ref LambdaExecutionRole
+
+  LambdaSchedule:
+    Type: AWS::Events::Rule
+    Properties:
+      ScheduleExpression: rate(5 minutes)
+      Targets:
+        - Arn: !GetAtt LambdaFunction.Arn
+          Id: "RDSMonitorLambdaSpecificTarget"
+    DependsOn: LambdaFunction
+
+  LambdaInvokePermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      Action: lambda:InvokeFunction
+      FunctionName: !Ref LambdaFunction
+      Principal: events.amazonaws.com
+      SourceArn: !GetAtt LambdaSchedule.Arn

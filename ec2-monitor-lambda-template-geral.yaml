@@ -1,0 +1,151 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: Template para Lambda que consulta Instance IDs de EC2 em execucao e cria alarmes de CPU e Status Check no CloudWatch com notificacoes via SNS.
+Parameters:
+  CpuUtilizationThreshold:
+    Type: Number
+    Default: 80
+    Description: Threshold para CPU Utilization (em %).
+    
+  StatusCheckFailedThreshold:
+    Type: Number
+    Default: 1
+    Description: Threshold para Status Check Failed.
+  SnsNotificationEmail:
+    Type: String
+    Description: E-mail para receber notificações via SNS.
+Resources:
+  # Tópico SNS para Notificações
+  AlarmNotificationTopic:
+    Type: AWS::SNS::Topic
+    Properties:
+      DisplayName: "EC2 Alarms Notification Topic"
+  # Inscrição de E-mail para o Tópico SNS
+  AlarmNotificationSubscription:
+    Type: AWS::SNS::Subscription
+    Properties:
+      Protocol: email
+      Endpoint: !Ref SnsNotificationEmail
+      TopicArn: !Ref AlarmNotificationTopic
+  # Função Lambda
+  LambdaFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: "EC2MonitorLambda"
+      Handler: "index.lambda_handler"
+      Runtime: python3.9
+      Role: !GetAtt LambdaExecutionRole.Arn
+      Timeout: 60
+      Code:
+        ZipFile: |
+          import boto3
+          import os
+          ec2 = boto3.client('ec2')
+          cloudwatch = boto3.client('cloudwatch')
+          def lambda_handler(event, context):
+              # Obtenha as instâncias em execução
+              instances = ec2.describe_instances(
+                  Filters=[{'Name': 'instance-state-name', 'Values': ['running']}]
+              )
+              for reservation in instances['Reservations']:
+                  for instance in reservation['Instances']:
+                      instance_id = instance['InstanceId']
+                      # Criar alarmes de CPU Utilization
+                      cloudwatch.put_metric_alarm(
+                          AlarmName=f'CPUUtilization-{instance_id}',
+                          ComparisonOperator='GreaterThanThreshold',
+                          EvaluationPeriods=1,
+                          MetricName='CPUUtilization',
+                          Namespace='AWS/EC2',
+                          Period=300,
+                          Statistic='Average',
+                          Threshold=int(os.environ['CPU_THRESHOLD']),
+                          ActionsEnabled=True,
+                          AlarmActions=[os.environ['SNS_TOPIC_ARN']],
+                          AlarmDescription='Alarme para CPU Utilization',
+                          Dimensions=[
+                              {'Name': 'InstanceId', 'Value': instance_id}
+                          ]
+                      )
+                      # Criar alarmes de Status Check Failed
+                      cloudwatch.put_metric_alarm(
+                          AlarmName=f'StatusCheckFailed-{instance_id}',
+                          ComparisonOperator='GreaterThanThreshold',
+                          EvaluationPeriods=1,
+                          MetricName='StatusCheckFailed',
+                          Namespace='AWS/EC2',
+                          Period=300,
+                          Statistic='Minimum',
+                          Threshold=int(os.environ['STATUS_CHECK_THRESHOLD']),
+                          ActionsEnabled=True,
+                          AlarmActions=[os.environ['SNS_TOPIC_ARN']],
+                          AlarmDescription='Alarme para Status Check Failed',
+                          Dimensions=[
+                              {'Name': 'InstanceId', 'Value': instance_id}
+                          ]
+                      )
+      Environment:
+        Variables:
+          CPU_THRESHOLD: !Ref CpuUtilizationThreshold
+          STATUS_CHECK_THRESHOLD: !Ref StatusCheckFailedThreshold
+          SNS_TOPIC_ARN: !Ref AlarmNotificationTopic
+  # Role para Lambda
+  LambdaExecutionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: LambdaExecutionRoleForEC2Alarms
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: EC2DescribeAndCWAccess
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - ec2:DescribeInstances
+                Resource: '*'
+              - Effect: Allow
+                Action:
+                  - cloudwatch:PutMetricAlarm
+                Resource: '*'
+              - Effect: Allow
+                Action:
+                  - sns:Publish
+                Resource: !Ref AlarmNotificationTopic
+  # Permissão para Lambda logar no CloudWatch
+  LambdaLogPolicy:
+    Type: AWS::IAM::Policy
+    Properties:
+      PolicyName: LambdaLogPolicy
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Action:
+              - logs:CreateLogGroup
+              - logs:CreateLogStream
+              - logs:PutLogEvents
+            Resource: '*'
+      Roles:
+        - !Ref LambdaExecutionRole
+  # Permissão do Trigger para execução periódica (Opcional)
+  LambdaSchedule:
+    Type: AWS::Events::Rule
+    Properties:
+      ScheduleExpression: rate(5 minutes)
+      Targets:
+        - Arn: !GetAtt LambdaFunction.Arn
+          Id: "EC2MonitorLambdaTarget"
+    DependsOn: LambdaFunction
+  LambdaInvokePermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      Action: lambda:InvokeFunction
+      FunctionName: !Ref LambdaFunction
+      Principal: events.amazonaws.com
+      SourceArn: !GetAtt LambdaSchedule.Arn

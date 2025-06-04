@@ -1,0 +1,159 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: Template para Lambda que consulta todas as filas SQS na conta e cria alarmes para métricas específicas no CloudWatch com notificações via SNS.
+
+Parameters:
+  ApproximateNumberOfMessagesVisibleThreshold:
+    Type: Number
+    Default: 100
+    Description: Threshold para ApproximateNumberOfMessagesVisible.
+  ApproximateAgeOfOldestMessageThreshold:
+    Type: Number
+    Default: 300
+    Description: Threshold para ApproximateAgeOfOldestMessage (em segundos).
+  SnsNotificationEmail:
+    Type: String
+    Description: E-mail para receber notificações via SNS.
+
+Resources:
+  # Tópico SNS para Notificações
+  AlarmNotificationTopic:
+    Type: AWS::SNS::Topic
+    Properties:
+      DisplayName: "SQS Alarms Notification Topic"
+
+  # Inscrição de E-mail para o Tópico SNS
+  AlarmNotificationSubscription:
+    Type: AWS::SNS::Subscription
+    Properties:
+      Protocol: email
+      Endpoint: !Ref SnsNotificationEmail
+      TopicArn: !Ref AlarmNotificationTopic
+
+  # Função Lambda
+  LambdaFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: "SQSMonitorLambda"
+      Handler: "index.lambda_handler"
+      Runtime: python3.9
+      Role: !GetAtt LambdaExecutionRole.Arn
+      Timeout: 60
+      Code:
+        ZipFile: |
+          import boto3
+          import os
+
+          sqs = boto3.client('sqs')
+          cloudwatch = boto3.client('cloudwatch')
+
+          def lambda_handler(event, context):
+              # Lista todas as filas SQS
+              queues = sqs.list_queues().get('QueueUrls', [])
+              for queue_url in queues:
+                  queue_name = queue_url.split('/')[-1]
+                  # Alarme para ApproximateNumberOfMessagesVisible
+                  cloudwatch.put_metric_alarm(
+                      AlarmName=f'ApproximateNumberOfMessagesVisible-{queue_name}',
+                      ComparisonOperator='GreaterThanThreshold',
+                      EvaluationPeriods=1,
+                      MetricName='ApproximateNumberOfMessagesVisible',
+                      Namespace='AWS/SQS',
+                      Period=300,
+                      Statistic='Average',
+                      Threshold=int(os.environ['MESSAGES_VISIBLE_THRESHOLD']),
+                      ActionsEnabled=True,
+                      AlarmActions=[os.environ['SNS_TOPIC_ARN']],
+                      AlarmDescription='Alarme para ApproximateNumberOfMessagesVisible',
+                      Dimensions=[
+                          {'Name': 'QueueName', 'Value': queue_name}
+                      ]
+                  )
+                  # Alarme para ApproximateAgeOfOldestMessage
+                  cloudwatch.put_metric_alarm(
+                      AlarmName=f'ApproximateAgeOfOldestMessage-{queue_name}',
+                      ComparisonOperator='GreaterThanThreshold',
+                      EvaluationPeriods=1,
+                      MetricName='ApproximateAgeOfOldestMessage',
+                      Namespace='AWS/SQS',
+                      Period=300,
+                      Statistic='Average',
+                      Threshold=int(os.environ['AGE_OF_OLDEST_MESSAGE_THRESHOLD']),
+                      ActionsEnabled=True,
+                      AlarmActions=[os.environ['SNS_TOPIC_ARN']],
+                      AlarmDescription='Alarme para ApproximateAgeOfOldestMessage',
+                      Dimensions=[
+                          {'Name': 'QueueName', 'Value': queue_name}
+                      ]
+                  )
+
+      Environment:
+        Variables:
+          MESSAGES_VISIBLE_THRESHOLD: !Ref ApproximateNumberOfMessagesVisibleThreshold
+          AGE_OF_OLDEST_MESSAGE_THRESHOLD: !Ref ApproximateAgeOfOldestMessageThreshold
+          SNS_TOPIC_ARN: !Ref AlarmNotificationTopic
+
+  # Role para Lambda
+  LambdaExecutionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: LambdaExecutionRoleForSQSAlarms
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: SQSDescribeAndCWAccess
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - sqs:ListQueues
+                  - sqs:GetQueueAttributes
+                Resource: '*'
+              - Effect: Allow
+                Action:
+                  - cloudwatch:PutMetricAlarm
+                Resource: '*'
+              - Effect: Allow
+                Action:
+                  - sns:Publish
+                Resource: !Ref AlarmNotificationTopic
+
+  # Permissão para Lambda logar no CloudWatch
+  LambdaLogPolicy:
+    Type: AWS::IAM::Policy
+    Properties:
+      PolicyName: LambdaLogPolicy
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Action:
+              - logs:CreateLogGroup
+              - logs:CreateLogStream
+              - logs:PutLogEvents
+            Resource: '*'
+      Roles:
+        - !Ref LambdaExecutionRole
+
+  # Permissão do Trigger para execução periódica
+  LambdaSchedule:
+    Type: AWS::Events::Rule
+    Properties:
+      ScheduleExpression: rate(5 minutes)
+      Targets:
+        - Arn: !GetAtt LambdaFunction.Arn
+          Id: "SQSMonitorLambdaTarget"
+    DependsOn: LambdaFunction
+
+  LambdaInvokePermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      Action: lambda:InvokeFunction
+      FunctionName: !Ref LambdaFunction
+      Principal: events.amazonaws.com
+      SourceArn: !GetAtt LambdaSchedule.Arn
