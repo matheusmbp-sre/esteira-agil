@@ -85,3 +85,13 @@ Nome: EC2-Monitoring-Stack-Role
 ![image-1](https://github.com/user-attachments/assets/31864d4a-bd90-4c32-b74f-686f0e4e11b2)
 
 ____________________________________________________________________________________________________________________________________________________________________________________________
+
+3 - Copie o arquivo ec2-monitor-lambda-template-geral.yaml que está presente neste repo.
+
+Obs: Usaremos esse arquivo para desmonstrar, mas poderia ser qualquer outro.
+
+____________________________________________________________________________________________________________________________________________________________________________________________
+
+4 - Criar uma stack no cloudformation > Choose an existing template > Upload a template file > Choose file
+
+
