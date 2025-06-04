@@ -22,46 +22,54 @@ Obs: O exemplo abaixo é apenas para EC2, mas contempla para todos os serviços,
 Nome: EC2-Monitoring-Stack-Policy
 
 ```{
-"Version": "2012-10-17",
-"Statement": [
-{
-"Sid": "VisualEditor0",
-"Effect": "Allow",
-"Action": [
-"lambda:CreateFunction",
-"ec2:DescribeInstances",
-"events:EnableRule",
-"sns:DeleteTopic",
-"events:PutRule",
-"sns:Unsubscribe",
-"iam:CreateRole",
-"iam:PutRolePolicy",
-"logs:CreateLogStream",
-"iam:PassRole",
-"sns:Publish",
-"iam:DeleteRolePolicy",
-"sns:Subscribe",
-"sns:ConfirmSubscription",
-"events:RemoveTargets",
-"events:DisableRule",
-"iam:GetRole",
-"events:DescribeRule",
-"sns:GetTopicAttributes",
-"lambda:GetFunction",
-"sns:CreateTopic",
-"iam:DeleteRole",
-"logs:CreateLogGroup",
-"logs:PutLogEvents",
-"events:PutTargets",
-"events:DeleteRule",
-"cloudwatch:PutMetricAlarm",
-"sns:SetSubscriptionAttributes",
-"lambda:AddPermission",
-"lambda:RemovePermission"
-],
-"Resource": "*"
-}
-]
+	"Version": "2012-10-17",
+	"Statement": [
+		{
+			"Sid": "VisualEditor0",
+			"Effect": "Allow",
+			"Action": [
+				"lambda:CreateFunction",
+				"ec2:DescribeInstances",
+				"events:EnableRule",
+				"sns:DeleteTopic",
+				"events:PutRule",
+				"sns:Unsubscribe",
+				"iam:CreateRole",
+				"iam:PutRolePolicy",
+				"logs:CreateLogStream",
+				"iam:PassRole",
+				"sns:Publish",
+				"iam:DeleteRolePolicy",
+				"sns:Subscribe",
+				"sns:ConfirmSubscription",
+				"events:RemoveTargets",
+				"events:DisableRule",
+				"iam:GetRole",
+				"events:DescribeRule",
+				"sns:GetTopicAttributes",
+				"lambda:GetFunction",
+				"sns:CreateTopic",
+				"iam:DeleteRole",
+				"logs:CreateLogGroup",
+				"logs:PutLogEvents",
+				"events:PutTargets",
+				"events:DeleteRule",
+				"cloudwatch:PutMetricAlarm",
+				"sns:SetSubscriptionAttributes",
+				"lambda:AddPermission",
+				"lambda:RemovePermission",
+				"rds:DescribeDBInstances",
+				"rds:DescribeDBClusters",
+				"rds:DescribeDBSnapshots",
+				"rds:CreateDBSnapshot",
+				"rds:DeleteDBSnapshot",
+				"rds:StartDBInstance",
+				"rds:StopDBInstance",
+				"rds:RebootDBInstance"
+			],
+			"Resource": "*"
+		}
+	]
 }
   
 ```
