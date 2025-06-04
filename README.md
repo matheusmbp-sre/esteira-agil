@@ -11,6 +11,14 @@ Criar alertas automáticos com CloudFormation para monitorar EC2, RDS, Lambda, S
 
 ![image](https://github.com/user-attachments/assets/b748c58a-1deb-4995-9c59-daddf6d7cd63)
 
+Dois scripts disponíveis para cada serviço:
+🔹 Script Geral:
+Varre todos os recursos automaticamente (ex: todos os RDS). Ideal para ambientes inteiros.
+🔹 Script Específico:
+Permite escolher exatamente quais recursos serão monitorados. Ideal para ambientes controlados por tag ou nome.
+
+
+
 --------------------------------------------------------------------------------------------------------------------------------------------------------------
 
 Configuração:
