@@ -83,17 +83,17 @@ Nome: EC2-Monitoring-Stack-Role
 ```
 
 {
-"Version": "2012-10-17",
-"Statement": [
-{
-"Sid": "",
-"Effect": "Allow",
-"Principal": {
-"Service": "cloudformation.amazonaws.com"
-},
-"Action": "sts:AssumeRole"
-}
-]
+    "Version": "2012-10-17",
+    "Statement": [
+        {
+            "Sid": "",
+            "Effect": "Allow",
+            "Principal": {
+                "Service": "cloudformation.amazonaws.com"
+            },
+            "Action": "sts:AssumeRole"
+        }
+    ]
 }
 ```
 ![image](https://github.com/user-attachments/assets/df6b8b3f-c920-4779-89ed-611ec3c8a6df)
