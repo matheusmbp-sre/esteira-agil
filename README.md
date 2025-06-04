@@ -6,10 +6,10 @@ Objetivo:
 Criar alertas automáticos com CloudFormation para monitorar EC2, RDS, Lambda, S3  e outros serviços cores de forma rápida, padronizada e eficiente.
 
 Fluxo Esteira:
-- User: "Seleciona Script"
-- CloudFormation: "Executa Stack YML"
-- CloudWatch: "Coleta e analisa métricas"
-- SNS: "Envia Notificações"
+- User: Seleciona Script
+- CloudFormation: Executa Stack YML
+- CloudWatch: Coleta e analisa métricas
+- SNS: Envia Notificações
 
 
 
