@@ -21,7 +21,8 @@ Obs: O exemplo abaixo é apenas para EC2, mas contempla para todos os serviços,
 
 Nome: EC2-Monitoring-Stack-Policy
 
-```{
+```
+{
 	"Version": "2012-10-17",
 	"Statement": [
 		{
