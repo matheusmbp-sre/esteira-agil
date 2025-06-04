@@ -4,6 +4,10 @@
 Objetivo:
 
 Criar alertas automáticos com CloudFormation para monitorar EC2, RDS, Lambda, S3  e outros serviços cores de forma rápida, padronizada e eficiente.
+
+
+![image](https://github.com/user-attachments/assets/b748c58a-1deb-4995-9c59-daddf6d7cd63)
+
 --------------------------------------------------------------------------------------------------------------------------------------------------------------
 
 Configuração:
